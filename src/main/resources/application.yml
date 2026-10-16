@@ -1,0 +1,33 @@
+server:
+  port: ${SERVER_PORT:8080}
+spring:
+  application:
+    name: resolveforge
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./output/20261016_P0本地数据_v01/resolveforge;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    username: ${DB_USER:resolveforge}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+app:
+  auth:
+    alice-token: ${ALICE_API_TOKEN}
+    bob-token: ${BOB_API_TOKEN}
+    service-token: ${COMMERCE_SERVICE_TOKEN}
+  commerce:
+    base-url: ${COMMERCE_BASE_URL:http://localhost:${SERVER_PORT:8080}}
+  model:
+    api-key: ${MODEL_API_KEY:}
+    base-url: ${MODEL_BASE_URL:https://api.deepseek.com}
+    endpoint-path: ${MODEL_ENDPOINT_PATH:/chat/completions}
+    name: ${MODEL_NAME:deepseek-chat}
+    timeout-seconds: ${MODEL_TIMEOUT_SECONDS:90}
+logging:
+  level:
+    root: INFO
+    io.agentscope: WARN

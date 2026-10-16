@@ -1,0 +1,20 @@
+# Optional PostgreSQL only. P0 default H2 does not need Docker or this file.
+name: resolveforge
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: resolveforge
+      POSTGRES_USER: ${DB_USER:-resolveforge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Initialize .env first}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - commerce_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d resolveforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+volumes:
+  commerce_data:

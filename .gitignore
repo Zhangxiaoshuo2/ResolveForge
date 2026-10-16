@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.idea/
+*.iml
+target/
+output/**/reference/
+output/**/logs/
+output/**/*.log
+output/**/live-*.json
+output/**/*.mv.db
+output/**/*.trace.db
+output/**/*.lock.db
+http-client.private.env.json
+*.private.env.json
