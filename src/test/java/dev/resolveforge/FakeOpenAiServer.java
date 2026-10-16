@@ -19,6 +19,9 @@ final class FakeOpenAiServer implements AutoCloseable {
     final List<JsonNode> requests = new CopyOnWriteArrayList<>();
     private static final Pattern ORDER = Pattern.compile("RF[0-9]{4}");
     FakeOpenAiServer() {
+        this(false);
+    }
+    FakeOpenAiServer(boolean policyScenario) {
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.setExecutor(executor);
@@ -56,6 +59,9 @@ final class FakeOpenAiServer implements AutoCloseable {
                         message = Map.of("role", "assistant", "content", "", "tool_calls", List.of(Map.of("id", "loop_"+requests.size(),
                                 "type", "function", "function", Map.of("name", "queryOrder", "arguments", "{\"orderNo\":\"RF1001\"}"))));
                         finish = "tool_calls";
+                    } else if (policyScenario) {
+                        message=policyMessage(messages,lastUser,order);
+                        finish=message.containsKey("tool_calls")?"tool_calls":"stop";
                     } else if ("tool".equals(last.path("role").asText())) {
                         message = Map.of("role", "assistant", "content", "[FAKE MODEL] 查询结果："+last.path("content").asText());
                         finish = "stop";
@@ -80,5 +86,30 @@ final class FakeOpenAiServer implements AutoCloseable {
         } catch (IOException ex) { throw new IllegalStateException(ex); }
     }
     String baseUrl() { return "http://127.0.0.1:"+server.getAddress().getPort(); }
+    private Map<String,Object> policyMessage(JsonNode messages,String user,String order) throws IOException {
+        var used=new java.util.HashSet<String>();var outputs=new StringBuilder();
+        for(var msg:messages) {
+            if("user".equals(msg.path("role").asText())) {used.clear();outputs.setLength(0);}
+            for(var tool:msg.path("tool_calls")) used.add(tool.path("function").path("name").asText());
+            if("tool".equals(msg.path("role").asText())) outputs.append(msg.path("content").asText()).append('\n');
+        }
+        var calls=new java.util.ArrayList<Map<String,Object>>();
+        if(order!=null) {
+            String tool=user.contains("物流")?"queryLogistics":"queryOrder";
+            if(!used.contains(tool)) calls.add(Map.of("id","fixture_business_"+java.util.UUID.randomUUID(),"type","function","function",Map.of("name",tool,"arguments",json.writeValueAsString(Map.of("orderNo",order)))));
+        }
+        boolean policy=user.contains("退款")||user.contains("退货")||user.contains("政策")||user.contains("怎么办")||user.contains("会员积分");
+        if(policy&&!used.contains("searchPolicy")) calls.add(Map.of("id","fixture_policy_"+java.util.UUID.randomUUID(),"type","function","function",Map.of("name","searchPolicy","arguments",json.writeValueAsString(Map.of("query",user)))));
+        if(!calls.isEmpty()) return Map.of("role","assistant","content","","tool_calls",calls);
+        String answer;
+        if(outputs.toString().contains("ORDER_NOT_FOUND")) answer="[FAKE MODEL] 订单不存在或不属于当前用户";
+        else if(outputs.toString().contains("NO_RELEVANT_EVIDENCE")) answer="[FAKE MODEL] 没有可靠政策依据";
+        else {
+            var ids=Pattern.compile("\"chunkId\"\\s*:\\s*\"([^\"]+)\"").matcher(outputs);
+            var citations=new StringBuilder();while(ids.find()) citations.append('[').append(ids.group(1)).append(']');
+            answer="[FAKE MODEL] "+outputs+citations;
+        }
+        return Map.of("role","assistant","content",answer);
+    }
     @Override public void close() { server.stop(0); executor.shutdownNow(); }
 }

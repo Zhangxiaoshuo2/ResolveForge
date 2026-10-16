@@ -35,7 +35,7 @@
 | 能力 | 原生 AgentScope | 本项目 |
 |---|---|---|
 | 推理与工具迭代 | ReActAgent | 设置提示、6 轮上限和总超时；检查终止原因 |
-| 工具 schema / 分发 | Toolkit、@Tool、@ToolParam | 两个订单/物流工具与 REST 客户端 |
+| 工具 schema / 分发 | Toolkit、@Tool、@ToolParam | 订单、物流及 searchPolicy 三个工具 |
 | Tool Calling 协议 | OpenAIChatModel | 环境变量、base URL、endpoint、模型名 |
 | 多轮历史 | InMemoryAgentStateStore | 从认证身份生成 RuntimeContext 的 user/session |
 | 同会话执行协调 | 框架原生会话机制 | 无自建 Agent Loop 或分布式锁 |
@@ -43,10 +43,12 @@
 | 售后权限 | — | Token 认证、可信身份注入、SQL 归属过滤 |
 | 每轮请求任务记录 | — | 基础 RUNNING/SUCCEEDED/FAILED 表与查询 API |
 
-没有引入 HarnessAgent、Skills、Multi-Agent、RAG、人工审批、退款工具或任务恢复。用户后续强调的 HITL 和可靠性属于后续设计方向，本轮只提供可检验的执行与错误边界。
+P1 在原有 AgentService 中注册 PolicyTools，并更新证据与引用提示；没有修改 P0 身份校验、CommerceTools 或任务状态实现。没有引入 HarnessAgent、Skills、Multi-Agent、人工审批、退款工具或任务恢复。
+
+新增 `src/main/java/dev/resolveforge/rag/` 提供 Markdown 加载、中文 BM25、独立真实 Embedding Provider、H2 向量缓存、余弦召回、RRF、结构化 Evidence、searchPolicy 和调试 REST 接口。类索引与设计取舍详见 `docs/rag-design.md`。三个工具均由框架原生 Toolkit 分发，无额外意图路由或固定调度顺序。
 
 ## 本轮验证与未验证
 
-自动化测试使用原生 ReActAgent 和真实 HTTP 业务 API；测试端点返回 Fake OpenAI 响应。测试源代码不会进入生产 JAR。2026-10-16 另行完成真实 DeepSeek 六次对话联调，工具调用与事实回复均已核对；真实 PostgreSQL 仍未验证，Chatwoot 已按用户调整移出范围。完整结果与运行命令见 `docs/verification.md`。
+默认自动化测试使用原生 ReActAgent 和真实 HTTP 业务 API；测试端点返回 Fake OpenAI 响应，P1 检索机制测试另用明确 Fake 基向量，测试类不会进入生产 JAR。最终 package 共 28 项通过，包含 P0 原有 12 项。P0 的真实 DeepSeek 六次对话保留为历史记录；P1 另行完成真实百炼 35 条检索比较和生产 JAR 上真实 DeepSeek 10 次对话。真实 PostgreSQL 仍未验证，Chatwoot 不在本轮范围。完整结果见 `docs/verification.md`。
 
 真实模型后续验收必须检查日志中实际的 queryOrder/queryLogistics 调用、对应返回事实、多轮订单号衔接及越权拒绝，不能只判断回复是否自然。`scripts/Test-Api.ps1 -RealModel` 已提供入口，不会在缺少 Key 时自动降级为 Fake Model。脚本使用原始 HTTP 响应字节进行 UTF-8 解码，避免 Windows PowerShell 5.1 对无 charset 的 JSON 响应产生中文乱码。

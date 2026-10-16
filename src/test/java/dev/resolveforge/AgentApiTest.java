@@ -36,6 +36,7 @@ class AgentApiTest {
         r.add("app.model.base-url", MODEL::baseUrl);
         r.add("app.model.name", () -> "fake-test-model");
         r.add("app.model.timeout-seconds", () -> 5);
+        r.add("app.embedding.api-key", () -> "");
     }
     @AfterAll static void stop() { MODEL.close(); }
     @BeforeEach void reset() { MODEL.requests.clear(); }
@@ -52,9 +53,10 @@ class AgentApiTest {
         assertThat(task.body()).contains("SUCCEEDED");
         assertThat(request("GET", "/api/tasks/"+result.path("taskId").asText(), BOB, null).statusCode()).isEqualTo(404);
         JsonNode tools = MODEL.requests.getFirst().path("tools");
-        assertThat(tools.size()).isEqualTo(2);
+        assertThat(tools.size()).isEqualTo(3); // P1 adds searchPolicy; retain P0 business-tool contracts.
         for (var tool : tools) {
-            assertThat(tool.path("function").path("parameters").path("properties").has("orderNo")).isTrue();
+            String parameter="searchPolicy".equals(tool.path("function").path("name").asText())?"query":"orderNo";
+            assertThat(tool.path("function").path("parameters").path("properties").has(parameter)).isTrue();
             assertThat(tool.path("function").path("parameters").path("properties").has("userId")).isFalse();
             assertThat(tool.path("function").path("parameters").path("properties").has("context")).isFalse();
         }

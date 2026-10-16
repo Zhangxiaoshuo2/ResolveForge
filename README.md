@@ -1,8 +1,10 @@
-# ResolveForge · 智能售后客服 Agent（P0）
+# ResolveForge · 智能售后客服 Agent（P1）
 
-Java 21 + Spring Boot 4.0.4 + AgentScope Java 2.0.4 + Maven。默认使用文件 H2，在 Windows 主机运行。按本轮调整后的范围，P0 不依赖 Chatwoot、Docker、Redis 或前端。
+Java 21 + Spring Boot 4.0.4 + AgentScope Java 2.0.4 + Maven。默认使用文件 H2，在 Windows 主机运行。P1 不依赖 Chatwoot、Docker、Redis 或前端。
 
-已实现原生 ReActAgent 工具循环、订单/物流 HTTP 工具、多轮上下文、用户隔离及每轮请求的基础任务状态。2026-10-16 已通过真实 DeepSeek `deepseek-chat` 的订单、物流、多轮、越权和无效订单联调。Fake Model 只存在于自动化测试源码；未配置 API Key 时 `/api/chat` 返回 `503 MODEL_NOT_CONFIGURED`。
+保留 P0 原生 ReActAgent 工具循环、订单/物流 HTTP 工具、多轮上下文、用户隔离及基础任务状态。P1 增加演示政策知识库、Lucene 中文 BM25、真实 Embedding 缓存、余弦召回及 RRF 融合，Agent 可自主组合三个工具回答售后咨询。
+
+Fake Model / Fake Embedding 只存在于自动化测试源码。未配置聊天模型 Key 时 `/api/chat` 返回 `503 MODEL_NOT_CONFIGURED`；未配置独立 Embedding Key 时仍可使用 BM25-only，不会标记为 Hybrid 成功。P0 已完成真实 DeepSeek 联调；P1 的实际评测结果见 `docs/rag-evaluation.md`。
 
 源码仓库：[Zhangxiaoshuo2/ResolveForge](https://github.com/Zhangxiaoshuo2/ResolveForge)。每轮开发完成后验证、提交并推送，规则保存在 `AGENTS.md`；真实密钥和本地运行数据不进入仓库。
 
@@ -125,12 +127,66 @@ mvn -B -ntp -Ppostgres-it verify
 
 `postgres-it` 显式执行 Testcontainers PostgreSQL 迁移与订单归属验证；缺少 Docker 时该检查失败，不会当作通过。切换数据库不会迁移原 H2 中的任务记录。Windows 主机访问容器数据库用 `localhost:5433`；未来容器访问主机服务才用 `host.docker.internal`。
 
+## P1：政策知识检索与业务工具协同
+
+知识库是 `src/main/resources/knowledge/` 中的五份**虚构演示政策**，共 19 个条款 Chunk，不代表真实平台规则，不保存私人订单事实。政策支持退款条件、退换货、发货时效、物流异常及签收处理；不会执行退款或更改订单。
+
+在 `.env` 单独配置 Embedding，不复用 DeepSeek Key：
+
+```dotenv
+EMBEDDING_API_KEY=你的百炼密钥
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+EMBEDDING_DIMENSIONS=1024
+```
+
+密钥地域须匹配 base URL，其他兼容服务可调整地址和模型。首次启动生成文档向量并缓存在本地 H2；以后启动根据内容哈希、模型、服务地址和维度复用。更换模型或维度会生成新的索引向量，旧缓存不会混入本次检索。改文档后重启即可重新加载，未变条款不重复调用 Embedding。
+
+新增接口仍需原有 Bearer Token：
+
+| 接口 | 用途 |
+|---|---|
+| `GET /api/knowledge/status` | Chunk 数、向量是否可用、模型、维度、缓存命中及重建数量 |
+| `POST /api/knowledge/search` | 检索调试，返回结构化 Evidence、实际 mode、fallbackReason |
+
+检索请求示例：
+
+```json
+{"query":"未发货订单可以退款吗？","topK":5,"mode":"AUTO"}
+```
+
+支持 AUTO、BM25、VECTOR、HYBRID。缺少 Key 或向量故障时，AUTO/HYBRID 返回实际 `BM25_ONLY` 和降级原因；显式 VECTOR 在不可用时返回 503。阈值过滤后没有结果时返回 `NO_RELEVANT_EVIDENCE`，不生成政策结论。
+
+默认参数在 `.env.example` 中：TopK=5，RecallK=12，BM25 最低分数 1.2，词法覆盖率 0.35，余弦最低相似度 0.60，RRF K=60。`score` 分别为 BM25、余弦或 RRF 分数，不是置信概率。调参后需重新评测。
+
+`api.http` 包含知识查询、RF1001 订单+政策、RF1003 物流+政策及无答案问题。Agent 按 `[DEMO-REFUND#unshipped-p1]` 引用实际检索条款；条件不足应询问，无证据应说明。工具选择由原生 ReActAgent 和模型完成，没有固定顺序或独立意图路由器。
+
+启动服务后，在另一个 PowerShell 终端执行 35 条检索用例：
+
+```powershell
+./scripts/Evaluate-Rag.ps1
+```
+
+标注位于 `src/test/resources/evaluation/retrieval-cases.json`。报告包含 Chunk Recall@3/5、MRR、Source Recall@5 和无答案识别。没有可用真实 Embedding 时只报告实际 BM25 结果，不制造 Vector/Hybrid 比较数据。
+
+真实 Agent 工具和引用审计需要读取本机运行日志：
+
+```powershell
+# 先创建目录；终端一启动并记录日志
+New-Item -ItemType Directory -Path output/20261016_P1开发记录_v01 -Force
+./scripts/Start-Agent.ps1 *> output/20261016_P1开发记录_v01/agent-runtime.log
+# 终端二运行，RuntimeLog 须指向上述文件
+./scripts/Test-P1Agent.ps1 -RuntimeLog output/20261016_P1开发记录_v01/agent-runtime.log
+```
+
+真实脚本只使用合成场景，原始回复和日志保留本地、排除 Git；脱敏评测 Markdown 可提交。工具/引用审计不能代替事实、条件和拒答质量检查。原有 `Test-Api.ps1 -RealModel` 仍可验证 P0 场景。Windows PowerShell 5.1 响应使用原始字节进行 UTF-8 解码。
+
 ## 当前边界
 
-- 已通过一次完整的真实 DeepSeek 六轮联调；更换模型、供应商或提示后仍需重新检查工具选择和事实回复，当前结果不代表任意输入都正确。
+- 已完成 P0 六次真实 DeepSeek 对话和 P1 十次真实组合咨询复测；更换模型、供应商或提示后仍需重新检查工具选择和事实回复，当前结果不代表任意输入都正确。
 - 会话上下文使用原生内存 StateStore，重启丢失；数据库中的任务历史仍保留。没有任务恢复能力，进程异常退出可能留下 RUNNING 记录。
 - 任务 SUCCEEDED 表示本轮正常生成回复，不代表订单存在或业务操作成功。工具查询失败会反馈给模型，事实拒答质量仍需真实模型验证。
 - 原生循环最多 6 轮，达到上限记 FAILED；整体超时默认 90 秒，超时返回 504。上下文未做自动淘汰或压缩，适用于当前单机演示规模。
-- Chatwoot、Webhook 去重、HITL、退款执行、RAG、复杂 Workflow、分布式任务、Multi-Agent、Skills 均不属于调整后的 P0。
+- P1 只加入 RAG 与业务工具协同；Chatwoot、Webhook、HITL、退款执行、任务恢复、复杂 Workflow、分布式任务、Multi-Agent、Skills 均未实现。
 
-架构见 `docs/architecture.md`，代码调用关系见 `docs/implementation-notes.md`，验证证据见 `docs/verification.md`。各阶段实现总结和关键代码索引位于 `output/20261016_P0开发记录_v01/`。
+架构见 `docs/architecture.md`，代码调用关系见 `docs/implementation-notes.md`，RAG 设计和评测见 `docs/rag-design.md`、`docs/rag-evaluation.md`，验证证据见 `docs/verification.md`。P1 总结和代码索引位于 `output/20261016_P1开发记录_v01/`。完成 P1 后停止，不自动进入 P2。

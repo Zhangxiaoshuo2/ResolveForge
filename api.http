@@ -62,3 +62,42 @@ Content-Type: application/json
 ### Task history for current user's session (latest 20)
 GET {{baseUrl}}/api/tasks?sessionId=demo-multi
 Authorization: Bearer {{aliceToken}}
+
+### P1: current corpus / embedding cache status (no secrets)
+GET {{baseUrl}}/api/knowledge/status
+Authorization: Bearer {{aliceToken}}
+
+### P1: Hybrid AUTO; inspect actual result.mode / fallbackReason
+POST {{baseUrl}}/api/knowledge/search
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{"query":"未发货订单可以退款吗？","topK":5,"mode":"AUTO"}
+
+### P1: explicit BM25 recall for comparison
+POST {{baseUrl}}/api/knowledge/search
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{"query":"付款后仓库还没寄出，能取消拿回钱吗？","topK":5,"mode":"BM25"}
+
+### P1: order facts + policy; model selects tools
+POST {{baseUrl}}/api/chat
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{"sessionId":"p1-order-policy","message":"RF1001 还没发货，我想退货退款，请引用演示政策。"}
+
+### P1: logistics facts + policy
+POST {{baseUrl}}/api/chat
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{"sessionId":"p1-logistics-policy","message":"RF1003 物流一直没到，应该怎么办？"}
+
+### P1: unsupported policy must not be invented
+POST {{baseUrl}}/api/chat
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{"sessionId":"p1-no-answer","message":"会员积分多久过期，可以转赠给朋友吗？"}

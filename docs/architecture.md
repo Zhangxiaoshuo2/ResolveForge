@@ -1,6 +1,6 @@
-# P0 系统架构与执行链路
+# P1 系统架构与执行链路
 
-本轮最终范围：Windows 主机上的独立 Agent 服务，默认 H2，保留 PostgreSQL 切换。Chatwoot 暂缓，不要求安装 Docker。
+本轮范围：在 P0 独立 Agent 服务上加入 Hybrid RAG 与业务工具协同，默认 H2，保留 PostgreSQL 切换。Chatwoot 暂缓，不要求 Docker。P0 身份校验、订单/物流工具和任务状态语义不变。
 
 ```mermaid
 sequenceDiagram
@@ -11,6 +11,7 @@ sequenceDiagram
     participant M as OpenAI 兼容模型
     participant T as Toolkit / CommerceTools
     participant API as Commerce REST API
+    participant RAG as PolicySearchService
     participant DB as H2 / PostgreSQL
     U->>C: POST /api/chat + Bearer Token + sessionId + message
     C->>C: Token 解析可信 userId
@@ -21,10 +22,16 @@ sequenceDiagram
     A->>M: 历史 + 工具 schema
     M-->>A: tool_calls（模型选择）
     A->>T: 原生 Toolkit 分发工具
-    T->>API: HTTP + 服务 Token + 可信 userId + orderNo
-    API->>DB: WHERE order_no=? AND user_id=?
-    DB-->>API: 业务结果 / 无可见记录
-    API-->>T: JSON / 统一 404
+    alt queryOrder / queryLogistics
+        T->>API: HTTP + 服务 Token + 可信 userId + orderNo
+        API->>DB: WHERE order_no=? AND user_id=?
+        DB-->>API: 业务结果 / 无可见记录
+        API-->>T: JSON / 统一 404
+    else searchPolicy
+        T->>RAG: 政策问题（可信身份由 RuntimeContext 注入）
+        RAG->>RAG: BM25 + 向量余弦召回 → RRF → TopK
+        RAG-->>T: Evidence + 来源 / NO_RELEVANT_EVIDENCE + 实际模式
+    end
     T-->>A: 工具结果
     A->>M: 追加 tool result，继续推理
     M-->>A: 最终答复
@@ -38,11 +45,13 @@ sequenceDiagram
 
 单个 Spring Boot 进程包含 Agent 与模拟售后业务包，以降低 P0 运行成本；Agent 的业务工具仍通过实际 HTTP API 调用业务模块，没有调用业务 Repository 或 JdbcTemplate。`COMMERCE_BASE_URL` 可指向未来独立部署的业务 API，本轮不拆分微服务。
 
-数据表：`commerce_orders`、`commerce_logistics`、`agent_tasks`。使用相同 Flyway SQL 初始化 H2 或 PostgreSQL。H2 兼容模式已测试；真实 PostgreSQL 的兼容性需通过显式 `postgres-it` 验证。
+数据表：`commerce_orders`、`commerce_logistics`、`agent_tasks`；P1 新增 `policy_embedding_cache`，不改动 P0 三张表。使用相同 Flyway SQL 初始化 H2 或 PostgreSQL。H2 兼容模式已测试；真实 PostgreSQL 的兼容性需通过显式 `postgres-it` 验证。
+
+政策文档随源码发布，启动时按标题和段落加载为 19 个 Chunk，构建内存 Lucene 索引，按内容哈希、模型、维度和服务地址复用 H2 向量。只有向量缺失或失效时才请求真实 Embedding。查询时 BM25 与余弦各自召回、阈值过滤后 RRF 融合；无充分候选返回 NO_RELEVANT_EVIDENCE。缺配置或向量服务失败可降级 BM25_ONLY，实际模式与原因随结果返回。详见 `docs/rag-design.md`。
 
 ## 用户与会话
 
-HTTP 层将两个演示 Token 映射为 alice/bob，服务层给 session 加 `debug:` 命名空间，然后通过 `RuntimeContext` 传递。`userId` 和 `sessionId` 共同标识状态，身份不从用户文本或模型参数中提取。工具 schema 只暴露 `orderNo`，`RuntimeContext` 参数由 AgentScope 自动注入。
+HTTP 层将两个演示 Token 映射为 alice/bob，服务层给 session 加 `debug:` 命名空间，然后通过 `RuntimeContext` 传递。`userId` 和 `sessionId` 共同标识状态，身份不从用户文本或模型参数中提取。业务工具 schema 只暴露 `orderNo`，政策工具只暴露 `query`，`RuntimeContext` 参数均由 AgentScope 自动注入。
 
 AgentScope 2.0.4 原生支持基于 `(userId, sessionId)` 的状态加载保存和同会话调用串行化。本项目使用 `InMemoryAgentStateStore`，没有自行管理对话消息数组或实现 session 锁。[官方 v2.0.4 Agent 文档](https://github.com/agentscope-ai/agentscope-java/blob/v2.0.4/docs/v2/en/docs/building-blocks/agent.md)、[工具参数注入文档](https://github.com/agentscope-ai/agentscope-java/blob/v2.0.4/docs/v2/en/docs/building-blocks/tool.md)。
 

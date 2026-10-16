@@ -13,3 +13,5 @@ output/**/*.trace.db
 output/**/*.lock.db
 http-client.private.env.json
 *.private.env.json
+output/**/rag-*.json
+output/**/agent-*.json

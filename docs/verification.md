@@ -1,4 +1,51 @@
-# P0 验证记录（2026-10-16）
+# 验证记录（P0 + P1，2026-10-16）
+
+## P1 最终构建与检索验证
+
+基线 `cf4d10ac4d2c2f4bf5e76e9564dd24f074a44b76`，分支 `codex/p1`。保留 P0 身份校验、CommerceTools、ChatExecutionService、TaskRepository 的实现与状态语义。
+
+| 检查 | 实际结果 | 证据 |
+|---|---|---|
+| `mvn -B -ntp package` | **28 tests，0 failures，0 errors，0 skipped；BUILD SUCCESS** | `output/20261016_P1开发记录_v01/16_final-build.log` |
+| P0 原有 12 项 | 11 AgentApiTest + 1 CommerceToolsTest 均通过 | `target/surefire-reports/`；Toolkit schema 仅适配第三个工具 |
+| P1 原生 Agent + Fake Provider | PolicyAgentApiTest 7 项通过 | 同上，Fake 只验证执行机制 |
+| 缓存、BM25、RRF、降级与数值边界 | RagMechanicsTest 7 项通过 | 同上，使用明确 Fake 基向量 |
+| Embedding HTTP 协议 | EmbeddingHttpTest 1 项通过 | 同上，不使用真实凭据 |
+| 评测标签有效性 | RetrievalDatasetTest 1 项通过，35 条用例 | 同上 |
+| 真实百炼 Embedding | HTTP 200，text-embedding-v4，1024 维；19 个当前 Chunk 向量可用 | 实际接口及索引状态；非 Fake |
+| 真实检索比较 | BM25、Vector、Hybrid 全部实际执行，无降级 | `20261016_检索评测_v01.md`、`20261016_检索评测_v02.md` |
+| PowerShell 兼容性 | PowerShell 7 / Windows PowerShell 5.1 评测指标一致 | 修复根 JSON 数组嵌套问题后均完成 35 条 |
+| 生产包内容 | 包含 5 份知识文档和 PolicySearchService，不包含 Fake 测试类 | `jar tf target/resolveforge-0.1.0.jar` |
+| 生产 JAR 重启复用向量 | cacheHits=19、embeddedChunks=0、vectorAvailable=true | `17_packaged-runtime.log`、本地 `rag-warm-status.json` |
+| 生产 JAR + 真实 DeepSeek + 真实百炼 | 10 次对话完成，必要工具缺失=0，未检索引用=0；逐条审阅事实与拒答 | `20261016_真实Agent评测_v02.md`，运行 `20261016204520` |
+| PostgreSQL | 未执行，未计入上述 28 项 | 显式 `postgres-it` 仍需要外部实例/Docker |
+
+真实检索结果：Hybrid Recall@3=1.0000、Recall@5=1.0000、MRR@5=0.9259；无答案识别 8/8。BM25-only Recall@3/5=0.5556，8 条有答案用例漏答，降级质量明显有限。详细指标、分母、多目标标签口径及开发集限制见 `docs/rag-evaluation.md`，不能将小集结果解释为生产准确率。
+
+本轮真实 Provider 与 Fake Provider 严格分开：默认自动化测试不访问外部模型，真实脚本依赖 `.env` 的独立 Embedding Key 和 LLM Key。源代码、测试与文档不包含实际密钥；向量缓存、原始合成对话、运行日志均排除 Git。
+
+### P1 真实 Agent 最终核对
+
+最终复测直接运行打包后的 JAR；聊天模型为 DeepSeek `deepseek-chat`，政策向量为真实百炼 `text-embedding-v4` / 1024 维，所有实际政策工具调用均报告 HYBRID。
+
+- 未发货退款咨询：检索后引用 DEMO-REFUND#unshipped-p1 等实际条款，说明 PAID/UNSHIPPED 条件。
+- RF1001 订单+政策：核对机械键盘、399.00、PAID，说明无需先退货，未声称已执行退款。
+- RF1003 物流+政策：核对 DEMO-SF1003、IN_TRANSIT、杭州转运中心，说明 72 小时是核查触发条件，不把停滞认定为丢件或自动退款；时间不足时询问。
+- 所有商品无条件退款：说明七天期限、商品完好条件和定制/生鲜/已兑换数字商品的排除条款，不泛化。
+- 会员积分问题：实际工具 NO_RELEVANT_EVIDENCE，明确无可靠政策依据，没有生成不存在的条款。
+- alice 文字声称 bob：RF2001 仍返回统一不可访问语义，无商品/金额泄漏。
+- 多轮：RF1003 首问后，不重复订单号的物流/政策追问仍正确衔接；bob 使用相同 sessionId 时被要求提供订单号，没有继承 alice 事实。
+- 伪装工具指令：本次样例未诱导模型跳过工具或声称退款已执行。只证明该样例，不宣称普遍抵御提示注入。
+
+引用审计以本轮 taskId 日志边界识别工具，以该用户会话在本轮结束前已有的证据核对引用；不存在用后续轮次补证。A07 只观察到订单工具，A08 才组合物流与政策工具。应用仍用 P0 的正常回复/拒答 SUCCEEDED 语义，订单不可访问不等于任务执行失败。
+
+本轮修复了：政策字符串的二次序列化、Fake 工具调用 ID 重复导致的测试干扰、PowerShell 5.1 根 JSON 数组嵌套和审计跨未来轮次混入的问题。真实答复中一处把“未满核查时限”推成“正常”的措辞已通过提示约束修正，最终复测未再出现该表述。详细原始日志仅留本地，不提交。
+
+以下为 P0 历史验证，仍保留以便追溯；P1 不实现 Chatwoot、HITL、退款执行、任务恢复或 P2 功能。
+
+---
+
+## P0 历史记录
 
 最终验收范围采用用户本轮调整：独立 Agent + 轻量本地数据库 + REST/IntelliJ HTTP Client，Chatwoot 暂缓。
 

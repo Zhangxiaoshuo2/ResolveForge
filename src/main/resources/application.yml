@@ -27,6 +27,20 @@ app:
     endpoint-path: ${MODEL_ENDPOINT_PATH:/chat/completions}
     name: ${MODEL_NAME:deepseek-chat}
     timeout-seconds: ${MODEL_TIMEOUT_SECONDS:90}
+  embedding:
+    api-key: ${EMBEDDING_API_KEY:}
+    base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    model: ${EMBEDDING_MODEL:text-embedding-v4}
+    dimensions: ${EMBEDDING_DIMENSIONS:1024}
+    timeout-seconds: ${EMBEDDING_TIMEOUT_SECONDS:30}
+  rag:
+    top-k: ${RAG_TOP_K:5}
+    recall-k: ${RAG_RECALL_K:12}
+    bm25-min-score: ${RAG_BM25_MIN_SCORE:1.2}
+    vector-min-score: ${RAG_VECTOR_MIN_SCORE:0.60}
+    lexical-min-coverage: ${RAG_LEXICAL_MIN_COVERAGE:0.35}
+    rrf-k: ${RAG_RRF_K:60}
+    fusion-min-score: ${RAG_FUSION_MIN_SCORE:0.0}
 logging:
   level:
     root: INFO

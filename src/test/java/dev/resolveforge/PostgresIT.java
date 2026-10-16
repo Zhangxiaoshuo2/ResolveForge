@@ -25,6 +25,7 @@ class PostgresIT {
         r.add("app.auth.bob-token", () -> "bob-test-token-000000000000000000");
         r.add("app.auth.service-token", () -> "service-test-token-00000000000000");
         r.add("app.model.api-key", () -> "");
+        r.add("app.embedding.api-key", () -> "");
     }
     @Autowired CommerceRepository commerce;
     @Test void postgresMigrationsAndOwnership() {
