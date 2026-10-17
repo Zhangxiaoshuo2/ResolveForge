@@ -6,18 +6,18 @@
 
 | 检查 | 实际结果 | 证据 |
 |---|---|---|
-| `mvn -B -ntp package` | **28 tests，0 failures，0 errors，0 skipped；BUILD SUCCESS** | `output/20261016_P1开发记录_v01/16_final-build.log` |
+| `mvn -B -ntp package` | **28 tests，0 failures，0 errors，0 skipped；BUILD SUCCESS** | `output/P1开发记录/16_final-build.log` |
 | P0 原有 12 项 | 11 AgentApiTest + 1 CommerceToolsTest 均通过 | `target/surefire-reports/`；Toolkit schema 仅适配第三个工具 |
 | P1 原生 Agent + Fake Provider | PolicyAgentApiTest 7 项通过 | 同上，Fake 只验证执行机制 |
 | 缓存、BM25、RRF、降级与数值边界 | RagMechanicsTest 7 项通过 | 同上，使用明确 Fake 基向量 |
 | Embedding HTTP 协议 | EmbeddingHttpTest 1 项通过 | 同上，不使用真实凭据 |
 | 评测标签有效性 | RetrievalDatasetTest 1 项通过，35 条用例 | 同上 |
 | 真实百炼 Embedding | HTTP 200，text-embedding-v4，1024 维；19 个当前 Chunk 向量可用 | 实际接口及索引状态；非 Fake |
-| 真实检索比较 | BM25、Vector、Hybrid 全部实际执行，无降级 | `20261016_检索评测_v01.md`、`20261016_检索评测_v02.md` |
+| 真实检索比较 | BM25、Vector、Hybrid 全部实际执行，无降级 | `检索评测_PowerShell7.md`、`检索评测_WindowsPowerShell.md` |
 | PowerShell 兼容性 | PowerShell 7 / Windows PowerShell 5.1 评测指标一致 | 修复根 JSON 数组嵌套问题后均完成 35 条 |
 | 生产包内容 | 包含 5 份知识文档和 PolicySearchService，不包含 Fake 测试类 | `jar tf target/resolveforge-0.1.0.jar` |
 | 生产 JAR 重启复用向量 | cacheHits=19、embeddedChunks=0、vectorAvailable=true | `17_packaged-runtime.log`、本地 `rag-warm-status.json` |
-| 生产 JAR + 真实 DeepSeek + 真实百炼 | 10 次对话完成，必要工具缺失=0，未检索引用=0；逐条审阅事实与拒答 | `20261016_真实Agent评测_v02.md`，运行 `20261016204520` |
+| 生产 JAR + 真实 DeepSeek + 真实百炼 | 10 次对话完成，必要工具缺失=0，未检索引用=0；逐条审阅事实与拒答 | `真实Agent评测_生产包验收.md`，运行 `20261016204520` |
 | PostgreSQL | 未执行，未计入上述 28 项 | 显式 `postgres-it` 仍需要外部实例/Docker |
 
 真实检索结果：Hybrid Recall@3=1.0000、Recall@5=1.0000、MRR@5=0.9259；无答案识别 8/8。BM25-only Recall@3/5=0.5556，8 条有答案用例漏答，降级质量明显有限。详细指标、分母、多目标标签口径及开发集限制见 `docs/rag-evaluation.md`，不能将小集结果解释为生产准确率。
@@ -53,15 +53,15 @@
 
 | 验证 | 结果 | 证据 |
 |---|---|---|
-| Java 21 + Boot 4.0.4 + AgentScope 2.0.4 编译 | 通过 | `output/20261016_P0开发记录_v01/02_compile.log` |
-| `mvn -B -ntp package` | 通过，含测试及可执行 JAR | `output/20261016_P0开发记录_v01/09_final-build.log` |
+| Java 21 + Boot 4.0.4 + AgentScope 2.0.4 编译 | 通过 | `output/P0开发记录/02_compile.log` |
+| `mvn -B -ntp package` | 通过，含测试及可执行 JAR | `output/P0开发记录/09_final-build.log` |
 | Agent HTTP 集成测试 | 11 项通过 | `target/surefire-reports/dev.resolveforge.AgentApiTest.txt` |
 | 工具故障与可信身份测试 | 1 项通过 | `target/surefire-reports/dev.resolveforge.CommerceToolsTest.txt` |
-| Windows PowerShell 5.1 初始化和启动脚本 | 通过，H2 启动成功 | `output/20261016_P0开发记录_v01/10_start-script.log` |
-| 本地真实 HTTP 业务冒烟 | 通过 | `output/20261016_P0开发记录_v01/11_local-smoke.log` |
+| Windows PowerShell 5.1 初始化和启动脚本 | 通过，H2 启动成功 | `output/P0开发记录/10_start-script.log` |
+| 本地真实 HTTP 业务冒烟 | 通过 | `output/P0开发记录/11_local-smoke.log` |
 | 文件 H2 重启持久化 | 通过，重启后原 FAILED 任务可查 | 同上 |
 | 未配置模型行为 | 503，FAILED/MODEL_NOT_CONFIGURED | `05_runtime.log`，重启后任务已复查 |
-| 真实 LLM 工具选择与回复 | **真实 DeepSeek 六次对话通过** | `output/20261016_真实模型联调_v01/20261016_真实模型联调总结_v01.md` |
+| 真实 LLM 工具选择与回复 | **真实 DeepSeek 六次对话通过** | `output/真实模型联调/真实模型联调总结.md` |
 | PostgreSQL | **未执行：当前无实例/Docker** | `PostgresIT` 是显式可选测试，未计入 12 项 |
 | Chatwoot/Webhook | **不在调整后的 P0 范围** | 无适配代码、无运行依赖 |
 
@@ -125,4 +125,4 @@ mvn -B -ntp package
 ./scripts/Test-Api.ps1 -RealModel
 ```
 
-真实模型验收需同时检查 `tool_call` 日志和事实回复。六次真实对话的输出由脚本保存到 `output/YYYYMMDD_真实模型联调_v01/`；原始 JSON 和日志不提交到仓库。不把未执行的 PostgreSQL 等项目列为通过。
+真实模型验收需同时检查 `tool_call` 日志和事实回复。六次真实对话的输出由脚本保存到 `output/真实模型联调/`；原始 JSON 和日志不提交到仓库。不把未执行的 PostgreSQL 等项目列为通过。

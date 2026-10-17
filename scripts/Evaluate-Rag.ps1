@@ -1,7 +1,17 @@
-﻿param([string[]]$Modes = @('BM25','VECTOR','HYBRID'))
+﻿param(
+    [string[]]$Modes = @('BM25','VECTOR','HYBRID'),
+    [ValidatePattern('^[^<>:"/\\|?*]+\.md$')]
+    [string]$ReportName = '检索评测.md'
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
+$outDir = Join-Path $projectRoot 'output/P1开发记录'
+if ($ReportName -match '^\d{4}[-_]?\d{2}[-_]?\d{2}' -or $ReportName -match '[_ .-]v\d+(?:\.\d+)*\.md$') {
+    throw 'Use a descriptive report name without a date prefix or version suffix.'
+}
+$report = Join-Path $outDir $ReportName
+if (Test-Path -LiteralPath $report) { throw 'Report already exists. Use -ReportName with a different descriptive purpose; existing reports are preserved.' }
 . (Join-Path $PSScriptRoot 'Environment.ps1')
 Import-ProjectEnv $projectRoot
 $headers = @{Authorization="Bearer $env:ALICE_API_TOKEN"}
@@ -45,11 +55,7 @@ foreach($mode in $Modes) {
     if(!$valid) { $summaries += [pscustomobject]@{mode=$mode;executed=$false;reason='FALLBACK_OCCURRED_NO_COMPARABLE_METRICS'};continue }
     $summaries += [pscustomobject]@{mode=$mode;executed=$true;answerable=$known;noAnswer=$unknown;recallAt3=$recall3/$known;recallAt5=$recall5/$known;mrr=$mrr/$known;sourceRecallAt5=$sourceRecall5/$known;noAnswerCorrect=$unknownRejected;noAnswerTotal=$unknown;falseAbstentions=$knownRejected}
 }
-$date=Get-Date -Format 'yyyyMMdd'
-$outDir=Join-Path $projectRoot "output/${date}_P1开发记录_v01"
 New-Item -ItemType Directory -Path $outDir -Force|Out-Null
-$version=1
-do {$report=Join-Path $outDir ("${date}_检索评测_v{0:D2}.md" -f $version);$version++} while(Test-Path -LiteralPath $report)
 $lines=@('# RAG 检索评测实际结果', '', "Corpus hash: $($status.corpusHash)","Chunks: $($status.chunks); embedding model: $($status.model); dimensions: $($status.dimensions); vector available: $($status.vectorAvailable)","Cases: $($cases.Count); evaluated via actual HTTP API. Scores are not LLM answer-quality scores.",'', '| Mode | Executed | Recall@3 | Recall@5 | MRR | Source Recall@5 | No-answer correct | False abstentions |','|---|---|---|---|---|---|---|---|')
 foreach($s in $summaries) {
     if($s.executed) {$lines += ('| {0} | yes | {1:F4} | {2:F4} | {3:F4} | {4:F4} | {5}/{6} | {7} |' -f $s.mode,$s.recallAt3,$s.recallAt5,$s.mrr,$s.sourceRecallAt5,$s.noAnswerCorrect,$s.noAnswerTotal,$s.falseAbstentions)}

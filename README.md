@@ -6,7 +6,7 @@ Java 21 + Spring Boot 4.0.4 + AgentScope Java 2.0.4 + Maven。默认使用文件
 
 Fake Model / Fake Embedding 只存在于自动化测试源码。未配置聊天模型 Key 时 `/api/chat` 返回 `503 MODEL_NOT_CONFIGURED`；未配置独立 Embedding Key 时仍可使用 BM25-only，不会标记为 Hybrid 成功。P0 已完成真实 DeepSeek 联调；P1 的实际评测结果见 `docs/rag-evaluation.md`。
 
-源码仓库：[Zhangxiaoshuo2/ResolveForge](https://github.com/Zhangxiaoshuo2/ResolveForge)。每轮开发完成后验证、提交并推送，规则保存在 `AGENTS.md`；真实密钥和本地运行数据不进入仓库。
+源码仓库：[Zhangxiaoshuo2/ResolveForge](https://github.com/Zhangxiaoshuo2/ResolveForge)。每轮开发完成后验证，提交和推送前按 `AGENTS.md` 确认；真实密钥和本地运行数据不进入仓库。
 
 ## Windows 快速启动
 
@@ -55,7 +55,7 @@ MODEL_TIMEOUT_SECONDS=90
 ./scripts/Test-Api.ps1 -RealModel
 ```
 
-真实联调入口会顺序运行订单、物流、多轮追问、非法访问、无效订单六次对话，并保存实际回复到 `output/YYYYMMDD_真实模型联调_v01/live-时间.json`。实际回答和 `tool_call` 日志需要一起审核；HTTP 200 本身不证明工具选对或答案正确。
+真实联调入口会顺序运行订单、物流、多轮追问、非法访问、无效订单六次对话，并保存实际回复到 `output/真实模型联调/live-时间.json`。实际回答和 `tool_call` 日志需要一起审核；HTTP 200 本身不证明工具选对或答案正确。
 
 ## IntelliJ HTTP Client
 
@@ -169,14 +169,16 @@ EMBEDDING_DIMENSIONS=1024
 
 标注位于 `src/test/resources/evaluation/retrieval-cases.json`。报告包含 Chunk Recall@3/5、MRR、Source Recall@5 和无答案识别。没有可用真实 Embedding 时只报告实际 BM25 结果，不制造 Vector/Hybrid 比较数据。
 
+文档统一保存在按主题命名的目录中，不使用日期前缀或版本后缀。检索报告默认写入 `output/P1开发记录/检索评测.md`，真实 Agent 报告默认写入同目录的 `真实Agent评测.md`。已有同名报告时，脚本在调用 API 前停止；再次评测可使用 `-ReportName 检索评测_阈值调整.md` 或 `-ReportName 真实Agent评测_模型切换.md` 按用途命名，保留原报告。运行时间和运行标识仍保留在正文或本地原始数据中。
+
 真实 Agent 工具和引用审计需要读取本机运行日志：
 
 ```powershell
 # 先创建目录；终端一启动并记录日志
-New-Item -ItemType Directory -Path output/20261016_P1开发记录_v01 -Force
-./scripts/Start-Agent.ps1 *> output/20261016_P1开发记录_v01/agent-runtime.log
+New-Item -ItemType Directory -Path output/P1开发记录 -Force
+./scripts/Start-Agent.ps1 *> output/P1开发记录/agent-runtime.log
 # 终端二运行，RuntimeLog 须指向上述文件
-./scripts/Test-P1Agent.ps1 -RuntimeLog output/20261016_P1开发记录_v01/agent-runtime.log
+./scripts/Test-P1Agent.ps1 -RuntimeLog output/P1开发记录/agent-runtime.log
 ```
 
 真实脚本只使用合成场景，原始回复和日志保留本地、排除 Git；脱敏评测 Markdown 可提交。工具/引用审计不能代替事实、条件和拒答质量检查。原有 `Test-Api.ps1 -RealModel` 仍可验证 P0 场景。Windows PowerShell 5.1 响应使用原始字节进行 UTF-8 解码。
@@ -189,4 +191,4 @@ New-Item -ItemType Directory -Path output/20261016_P1开发记录_v01 -Force
 - 原生循环最多 6 轮，达到上限记 FAILED；整体超时默认 90 秒，超时返回 504。上下文未做自动淘汰或压缩，适用于当前单机演示规模。
 - P1 只加入 RAG 与业务工具协同；Chatwoot、Webhook、HITL、退款执行、任务恢复、复杂 Workflow、分布式任务、Multi-Agent、Skills 均未实现。
 
-架构见 `docs/architecture.md`，代码调用关系见 `docs/implementation-notes.md`，RAG 设计和评测见 `docs/rag-design.md`、`docs/rag-evaluation.md`，验证证据见 `docs/verification.md`。P1 总结和代码索引位于 `output/20261016_P1开发记录_v01/`。完成 P1 后停止，不自动进入 P2。
+架构见 `docs/architecture.md`，代码调用关系见 `docs/implementation-notes.md`，RAG 设计和评测见 `docs/rag-design.md`、`docs/rag-evaluation.md`，验证证据见 `docs/verification.md`。P1 总结和代码索引位于 `output/P1开发记录/`。完成 P1 后停止，不自动进入 P2。

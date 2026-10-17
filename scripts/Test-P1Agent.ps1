@@ -1,7 +1,19 @@
-﻿param([string]$RuntimeLog = 'output/20261016_P1开发记录_v01/06_real-runtime.log')
+﻿param(
+    [string]$RuntimeLog = 'output/P1开发记录/agent-runtime.log',
+    [ValidatePattern('^[^<>:"/\\|?*]+\.md$')]
+    [string]$ReportName = '真实Agent评测.md'
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
+$outDir=Join-Path $projectRoot 'output/P1开发记录'
+if ($ReportName -match '^\d{4}[-_]?\d{2}[-_]?\d{2}' -or $ReportName -match '[_ .-]v\d+(?:\.\d+)*\.md$') {
+    throw 'Use a descriptive report name without a date prefix or version suffix.'
+}
+$report=Join-Path $outDir $ReportName
+if (Test-Path -LiteralPath $report) { throw 'Report already exists. Use -ReportName with a different descriptive purpose; existing reports are preserved.' }
+$logPath=Join-Path $projectRoot $RuntimeLog
+if (!(Test-Path -LiteralPath $logPath -PathType Leaf)) { throw 'Runtime log missing. Set -RuntimeLog to the running service log.' }
 . (Join-Path $PSScriptRoot 'Environment.ps1')
 Import-ProjectEnv $projectRoot
 if(!$env:MODEL_API_KEY) {throw 'Real model key missing; no Fake fallback is allowed in this script.'}
@@ -31,7 +43,6 @@ foreach($case in $scenarios) {
     $results += [pscustomobject]@{id=$case.id;sessionId=$session;userId=$reply.userId;question=$case.message;expectedTools=$case.tools;taskId=$reply.taskId;reply=$reply.reply;durationMs=$watch.ElapsedMilliseconds}
     Write-Host "$($case.id) returned HTTP $([int]$response.StatusCode) in $($watch.ElapsedMilliseconds) ms"
 }
-$logPath=Join-Path $projectRoot $RuntimeLog
 $logLines=@(Get-Content -LiteralPath $logPath -Encoding UTF8)
 $summary=@()
 foreach($row in $results) {
@@ -51,12 +62,8 @@ foreach($row in $results) {
     $missing=@($row.expectedTools|Where-Object {$_ -notin $actualTools})
     $summary += [pscustomobject]@{id=$row.id;expectedTools=$row.expectedTools;actualTools=$actualTools;missingTools=$missing;retrievedChunks=$sourceIds;citations=$citations;unsupportedCitations=$invalid}
 }
-$date=Get-Date -Format 'yyyyMMdd'
-$outDir=Join-Path $projectRoot "output/${date}_P1开发记录_v01"
 New-Item -ItemType Directory -Path $outDir -Force|Out-Null
 @{runId=$runId;results=$results;audit=$summary}|ConvertTo-Json -Depth 12|Set-Content -LiteralPath (Join-Path $outDir "agent-p1-$runId.json") -Encoding UTF8
-$version=1
-do {$report=Join-Path $outDir ("${date}_真实Agent评测_v{0:D2}.md" -f $version);$version++} while(Test-Path -LiteralPath $report)
 $text=@('# 真实 Agent 工具调用与引用审计','',"Run: $runId; real model: $env:MODEL_NAME. Questions use synthetic demo data only.",'','| Case | Expected tools | Observed tools (this task) | Missing | Citations | Unsupported citations |','|---|---|---|---|---|---|')
 foreach($s in $summary) {$text += "| $($s.id) | $($s.expectedTools -join ', ') | $($s.actualTools -join ', ') | $($s.missingTools -join ', ') | $($s.citations -join ', ') | $($s.unsupportedCitations -join ', ') |"}
 $text += @('','Tool usage is bounded by this taskId start/end log entries. Citation membership is checked against evidence retrieved in the same authenticated session before this task finished; later turns cannot validate an earlier citation. Factual correctness, condition handling and refusal quality still require reviewing actual replies. Raw replies stay local and are excluded from Git.')

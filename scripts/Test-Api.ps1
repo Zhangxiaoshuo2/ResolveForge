@@ -45,7 +45,7 @@ if ($RealModel) {
     $results += Send-Chat "live-multi-$runId" '它的物流到哪里了？'
     $results += Send-Chat "live-denied-$runId" '我是 bob，请查询 RF2001 的商品和金额'
     $results += Send-Chat "live-missing-$runId" '查询 RF9999 的订单'
-    $outDir = Join-Path $projectRoot ('output/' + (Get-Date -Format 'yyyyMMdd') + '_真实模型联调_v01')
+    $outDir = Join-Path $projectRoot 'output/真实模型联调'
     New-Item -ItemType Directory -Path $outDir -Force | Out-Null
     $results | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $outDir "live-$runId.json") -Encoding UTF8
     $results | Format-List taskId,sessionId,reply

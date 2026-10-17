@@ -4,7 +4,7 @@
 
 固定 `io.agentscope:agentscope-core:2.0.4` 与 `io.agentscope:agentscope-extensions-model-openai:2.0.4`。AgentScope 官方父 POM 要求最低 Java 17，本项目 Java 21；官方 dependency BOM 的 Spring Boot 版本为 4.0.4，starter 聚合模块局部版本为 4.0.3。本项目没有依赖 Spring Boot starter，直接使用框架组件并由 Spring 管理业务服务，选 Boot 4.0.4 后完成编译与 HTTP 测试。[父 POM](https://github.com/agentscope-ai/agentscope-java/blob/v2.0.4/pom.xml)、[依赖 BOM](https://github.com/agentscope-ai/agentscope-java/blob/v2.0.4/agentscope-dependencies-bom/pom.xml)。
 
-依赖树实测 SDK 为 2.0.4、Reactor 3.8.4、SDK Jackson 2.21.1。Boot MVC 使用自己的默认 JSON converter；本项目以字符串消费业务 API JSON，不把 SDK 的 Jackson 内部类型暴露为 HTTP DTO。依赖树证据：`output/20261016_P0开发记录_v01/06_dependencies.log`。
+依赖树实测 SDK 为 2.0.4、Reactor 3.8.4、SDK Jackson 2.21.1。Boot MVC 使用自己的默认 JSON converter；本项目以字符串消费业务 API JSON，不把 SDK 的 Jackson 内部类型暴露为 HTTP DTO。依赖树证据：`output/P0开发记录/06_dependencies.log`。
 
 ## 源码索引
 
